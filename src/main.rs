@@ -8,7 +8,7 @@ use indexer::rpc_client::{
     get_balance_at_signature, get_signatures_for_address, get_transaction_by_signature, rpc_client,
 };
 
-struct Address {
+struct TokenAddress {
     id: i64,
     address: String,
 }
@@ -34,16 +34,13 @@ fn main() -> Result<(), Error> {
         sys_time.duration_since(UNIX_EPOCH).unwrap().as_millis()
     );
 
-    let mut addresses_to_query: Vec<Address> = Vec::new();
+    let mut addresses_to_query: Vec<TokenAddress> = Vec::new();
     let mut client = Client::connect(&std::env::var("DB_STRING").unwrap(), NoTls)?;
 
-    match client.query(
-        "SELECT * FROM solana_addresses WHERE inspected_on is null",
-        &[],
-    ) {
+    match client.query("SELECT * FROM wallets WHERE fetched_on is null", &[]) {
         Ok(rows) => {
             for row in rows {
-                let adr = Address {
+                let adr = TokenAddress {
                     id: row.get(0),
                     address: row.get(1),
                 };
@@ -61,7 +58,7 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn parse_transactions_by_token(token: Address, client: &mut Client) {
+fn parse_transactions_by_token(token: TokenAddress, client: &mut Client) {
     let connection = rpc_client();
     let token_address = Pubkey::from_str(&token.address).unwrap();
 
@@ -70,16 +67,13 @@ fn parse_transactions_by_token(token: Address, client: &mut Client) {
     for signature in signs_by_token {
         let encoded_transaction = get_transaction_by_signature(&connection, signature.clone());
         let transaction_meta = encoded_transaction.transaction.meta.unwrap();
-        println!("fee: {:?}", transaction_meta.fee);
 
         let balance =
             get_balance_at_signature(&connection, token_address, signature.clone()).unwrap();
 
         let trans_block_time = encoded_transaction.block_time.unwrap() as i64;
-        println!("block time: {:?}", trans_block_time);
-
         let block_time: NaiveDateTime =
-            NaiveDateTime::from_timestamp_opt(trans_block_time, 0).expect("cicic");
+            NaiveDateTime::from_timestamp_opt(trans_block_time, 0).expect("Date conversion error");
 
         let params: BalanceParams = BalanceParams {
             id: token.id,
@@ -114,10 +108,7 @@ fn insert_balance(client: &mut Client, params: &BalanceParams) {
 }
 
 fn update_token_address(client: &mut Client, id: i64) {
-    match client.execute(
-        "UPDATE solana_addresses SET inspected_on = now() WHERE id=$1",
-        &[&id],
-    ) {
+    match client.execute("UPDATE wallets SET fetched_on = now() WHERE id=$1", &[&id]) {
         Ok(_) => {}
         Err(err) => println!("ERROR update token address: {:?}", err),
     }
