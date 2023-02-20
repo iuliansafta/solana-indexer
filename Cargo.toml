@@ -1,0 +1,26 @@
+[package]
+name = "indexer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "indexer"
+
+[dependencies]
+solana-sdk = "1.15.2"
+solana-client = "1.15.2"
+postgres = {version = "0.19.4", features = ["with-chrono-0_4"]}
+rust_decimal = "1.28.1"
+rust_decimal_macros = "1.28.1"
+bs58 = "0.4.0"
+solana-transaction-status = "1.15.2"
+dotenv = "0.15.0"
+serde_json = "1.0.93"
+serde = "1.0.152"
+postgres-types = "0.2.4"
+chrono = "0.4.23"
+time = "0.3.19"
