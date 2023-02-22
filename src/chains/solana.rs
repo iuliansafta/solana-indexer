@@ -1,13 +1,73 @@
+use crate::chains::types::BalanceParams;
+use chrono::NaiveDateTime;
 use solana_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::str::FromStr;
 
-pub fn rpc_client() -> RpcClient {
-    RpcClient::new(std::env::var("SOLANA_RPC_ENDPOINT").unwrap().to_string())
+#[derive(Debug)]
+pub struct TokenAddress<'a> {
+    pub id: &'a uuid::Uuid,
+    pub address: String,
 }
 
-pub fn get_signatures_for_address(
+// pub struct BalanceParams<'a> {
+//     id: &'a str,
+//     block_time: NaiveDateTime,
+//     post_balance: i64,
+//     pre_balance: i64,
+//     fee: i64,
+//     transfer_type: i16,
+//     transaction_has: String,
+//     // address: String,
+// }
+#[derive(Debug)]
+struct Balance {
+    pub balance_before: u64,
+    pub balance_after: u64,
+    pub transaction_type: i16,
+}
+
+pub fn init_chain_with_token(token: &TokenAddress) {
+    let connection = RpcClient::new(std::env::var("SOLANA_RPC_ENDPOINT").unwrap().to_string());
+
+    // println!("Init chain connection with pub key {:?}", token);
+    parse_transactions_by_token(&connection, &token);
+}
+
+fn parse_transactions_by_token(connection: &RpcClient, token: &TokenAddress) {
+    let token_address = Pubkey::from_str(&token.address).unwrap();
+
+    let signs_by_token = get_signatures_for_address(&connection, token_address, 1000);
+
+    for signature in signs_by_token {
+        let encoded_transaction = get_transaction_by_signature(&connection, signature.clone());
+        let transaction_meta = encoded_transaction.transaction.meta.unwrap();
+
+        let balance =
+            get_balance_at_signature(&connection, token_address, signature.clone()).unwrap();
+
+        let trans_block_time = encoded_transaction.block_time.unwrap() as i64;
+        let block_time: NaiveDateTime =
+            NaiveDateTime::from_timestamp_opt(trans_block_time, 0).expect("Date conversion error");
+
+        let params: BalanceParams = BalanceParams {
+            id: token.id,
+            block_time,
+            post_balance: balance.balance_after as i64,
+            pre_balance: balance.balance_before as i64,
+            fee: transaction_meta.fee as i64,
+            transfer_type: balance.transaction_type,
+            transaction_has: signature,
+        };
+
+        // insert_balance(&params);
+
+        println!("Inserted params {:?}", params);
+    }
+}
+
+fn get_signatures_for_address(
     connection: &RpcClient,
     address: Pubkey,
     max_length: usize,
@@ -42,7 +102,7 @@ pub fn get_signatures_for_address(
     signatures
 }
 
-pub fn get_transaction_by_signature(
+fn get_transaction_by_signature(
     connection: &RpcClient,
     signature: String,
 ) -> EncodedConfirmedTransactionWithStatusMeta {
@@ -55,14 +115,7 @@ pub fn get_transaction_by_signature(
     transaction_with_meta
 }
 
-#[derive(Debug)]
-pub struct Balance {
-    pub balance_before: u64,
-    pub balance_after: u64,
-    pub transaction_type: i16,
-}
-
-pub fn get_balance_at_signature(
+fn get_balance_at_signature(
     connection: &RpcClient,
     address: Pubkey,
     signature: String,
