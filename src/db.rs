@@ -1,6 +1,5 @@
 use crate::chains::types::BalanceParams;
 use sqlx::postgres::PgPool;
-use std::env;
 
 pub async fn insert_balance(pool: &PgPool, params: &BalanceParams<'_>) -> anyhow::Result<()> {
     println!("params to insert {:?}", params);
@@ -17,16 +16,16 @@ pub async fn insert_balance(pool: &PgPool, params: &BalanceParams<'_>) -> anyhow
         params.transaction_has,
         params.transfer_type,
         params.block_time
-    )
-    .fetch_one(pool)
-    .await?;
+    ).execute(pool).await?;
+
+    // let _rec2 = sqlx::query!(
+    //     r#"
+    //     UPDATE wallets SET fetched_on = now() WHERE id=$1
+    //     "#,
+    //     params.id
+    // )
+    // .execute(pool)
+    // .await?;
 
     Ok(())
 }
-
-// pub fn update_token_address(client: &mut Client, id: i64) {
-//     match client.execute("UPDATE wallets SET fetched_on = now() WHERE id=$1", &[&id]) {
-//         Ok(_) => {}
-//         Err(err) => println!("ERROR update token address: {:?}", err),
-//     }
-// }

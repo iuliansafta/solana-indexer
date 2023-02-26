@@ -1,8 +1,10 @@
 use crate::chains::types::BalanceParams;
+use crate::db::insert_balance;
 use chrono::NaiveDateTime;
 use solana_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use sqlx::PgPool;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -11,16 +13,6 @@ pub struct TokenAddress<'a> {
     pub address: String,
 }
 
-// pub struct BalanceParams<'a> {
-//     id: &'a str,
-//     block_time: NaiveDateTime,
-//     post_balance: i64,
-//     pre_balance: i64,
-//     fee: i64,
-//     transfer_type: i16,
-//     transaction_has: String,
-//     // address: String,
-// }
 #[derive(Debug)]
 struct Balance {
     pub balance_before: u64,
@@ -28,14 +20,23 @@ struct Balance {
     pub transaction_type: i16,
 }
 
-pub fn init_chain_with_token(token: &TokenAddress) {
+pub async fn init_chain_with_token(
+    token: &TokenAddress<'_>,
+    pool: &PgPool,
+) -> anyhow::Result<(), anyhow::Error> {
     let connection = RpcClient::new(std::env::var("SOLANA_RPC_ENDPOINT").unwrap().to_string());
 
     // println!("Init chain connection with pub key {:?}", token);
-    parse_transactions_by_token(&connection, &token);
+    parse_transactions_by_token(&connection, &token, &pool).await?;
+
+    Ok(())
 }
 
-fn parse_transactions_by_token(connection: &RpcClient, token: &TokenAddress) {
+async fn parse_transactions_by_token(
+    connection: &RpcClient,
+    token: &TokenAddress<'_>,
+    pool: &PgPool,
+) -> anyhow::Result<(), anyhow::Error> {
     let token_address = Pubkey::from_str(&token.address).unwrap();
 
     let signs_by_token = get_signatures_for_address(&connection, token_address, 1000);
@@ -61,10 +62,10 @@ fn parse_transactions_by_token(connection: &RpcClient, token: &TokenAddress) {
             transaction_has: signature,
         };
 
-        // insert_balance(&params);
-
-        println!("Inserted params {:?}", params);
+        insert_balance(pool, &params).await?
     }
+
+    Ok(())
 }
 
 fn get_signatures_for_address(
